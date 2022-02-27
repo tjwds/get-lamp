@@ -105,28 +105,46 @@ const transmitMessage = async function (string, toggleLight) {
   }
 };
 
-const ws = new WebSocket("wss://www.jakobmaier.at/lamp_ws");
+let ws = new WebSocket("wss://www.jakobmaier.at/lamp_ws");
+let sendInterval;
 
-ws.on("open", () => {
-  const doIt = () => {
-    transmitMessage(message, () => {
-      lampState++;
-      ws.send(`{"action":"plus"}`);
-    });
-  };
+const setUpWsListeners = () => {
+  ws.on("open", () => {
+    const doIt = () => {
+      transmitMessage(message, () => {
+        lampState++;
+        try {
+          ws.send(`{"action":"plus"}`);
+        } catch (err) {
+          console.log("hmm, couldn't send that one.");
+        }
+      });
+    };
 
-  doIt();
-  setInterval(() => {
     doIt();
-  }, EVERY_N_MS);
-});
+    sendInterval = setInterval(() => {
+      doIt();
+    }, EVERY_N_MS);
+  });
 
-ws.on("message", async function incoming(data) {
-  try {
-    const message = JSON.parse(data.toString());
-    // even means it's off
-    if (message.type === "state") {
-      lampState = message.value;
-    }
-  } catch (e) {}
-});
+  ws.on("message", async function incoming(data) {
+    try {
+      const message = JSON.parse(data.toString());
+      // even means it's off
+      if (message.type === "state") {
+        lampState = message.value;
+      }
+    } catch (e) {}
+  });
+};
+
+setUpWsListeners();
+
+// reconnect every 100 times we send the message
+setInterval(() => {
+  console.log("reconnecting...");
+  clearInterval(sendInterval);
+  ws.close();
+  ws = new WebSocket("wss://www.jakobmaier.at/lamp_ws");
+  setUpWsListeners();
+}, EVERY_N_MS * 101 - 1);
