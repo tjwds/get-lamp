@@ -76,11 +76,14 @@ const transmitCharacter = async function (character, toggleLight) {
   }
 };
 
-let lightIsOn = true;
+let lampState = 0;
+const lightIsOn = () => {
+  return !!(lampState % 2);
+};
 
 const transmitMessage = async function (string, toggleLight) {
   // make sure the light starts off off
-  if (lightIsOn) {
+  if (lightIsOn()) {
     toggleLight();
     await wait(1);
   }
@@ -97,14 +100,19 @@ const transmitMessage = async function (string, toggleLight) {
   }
   // be polite, leave on the light
   await wait(4);
-  toggleLight();
+  if (!lightIsOn()) {
+    toggleLight();
+  }
 };
 
 const ws = new WebSocket("wss://www.jakobmaier.at/lamp_ws");
 
 ws.on("open", () => {
   const doIt = () => {
-    transmitMessage(message, () => ws.send(`{"action":"plus"}`));
+    transmitMessage(message, () => {
+      lampState++;
+      ws.send(`{"action":"plus"}`);
+    });
   };
 
   doIt();
@@ -118,7 +126,7 @@ ws.on("message", async function incoming(data) {
     const message = JSON.parse(data.toString());
     // even means it's off
     if (message.type === "state") {
-      lightIsOn = !(message.value % 2);
+      lampState = message.value;
     }
   } catch (e) {}
 });
